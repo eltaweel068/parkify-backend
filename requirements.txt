@@ -1,0 +1,27 @@
+# Parkify Backend - Requirements
+# Fixed for Python 3.11-3.13
+
+# Core Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# Data Validation
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# Utilities
+loguru==0.7.2
+httpx==0.26.0
+python-dotenv==1.0.0
+
+# WebSockets
+websockets==12.0
+
+# Note: Pillow removed - not needed for basic API
+# Add it back when you need image processing:
+# pip install Pillow

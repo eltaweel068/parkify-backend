@@ -1,0 +1,28 @@
+# Virtual environment
+venv/
+.venv/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+
+# Environment variables (IMPORTANT - keeps secrets safe!)
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Firebase credentials (NEVER upload these!)
+*firebase*.json
+serviceAccountKey.json
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
