@@ -26,3 +26,7 @@ serviceAccountKey.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Project files (not needed in repo)
+Screens/
+*.docx

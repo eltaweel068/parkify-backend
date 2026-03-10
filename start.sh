@@ -1,78 +1,79 @@
 #!/bin/bash
 
 echo "=========================================="
-echo "   PARKIFY - Local Development Setup"
+echo "   PARKIFY - Backend Setup (Linux/Mac)"
 echo "=========================================="
 echo ""
 
 # Check Python version
 PYTHON_CMD=""
 
-# Try python3.11 first (recommended)
 if command -v python3.11 &> /dev/null; then
     PYTHON_CMD="python3.11"
-    echo "✅ Found Python 3.11"
-# Try python3.12
+    echo "[OK] Found Python 3.11"
 elif command -v python3.12 &> /dev/null; then
     PYTHON_CMD="python3.12"
-    echo "✅ Found Python 3.12"
-# Try python3.13
+    echo "[OK] Found Python 3.12"
 elif command -v python3.13 &> /dev/null; then
     PYTHON_CMD="python3.13"
-    echo "✅ Found Python 3.13"
-# Try generic python3
+    echo "[OK] Found Python 3.13"
 elif command -v python3 &> /dev/null; then
     PYTHON_CMD="python3"
     PYTHON_VER=$(python3 --version 2>&1 | cut -d' ' -f2 | cut -d'.' -f1,2)
-    echo "✅ Found Python $PYTHON_VER"
-    
-    # Warning for Python 3.14+
-    if [[ "$PYTHON_VER" == "3.14" ]]; then
-        echo ""
-        echo "⚠️  WARNING: Python 3.14 detected!"
-        echo "    Some packages may not work. Recommended: Python 3.11 or 3.12"
-        echo ""
-    fi
+    echo "[OK] Found Python $PYTHON_VER"
 else
-    echo "❌ Python3 not found!"
-    echo "   Install Python 3.11: sudo apt install python3.11 python3.11-venv"
+    echo "[ERROR] Python3 not found!"
+    echo "   Install: sudo apt install python3 python3-venv"
     exit 1
 fi
 
 echo "   Using: $PYTHON_CMD"
 echo ""
 
-# Remove old venv if exists
+# Create venv if not exists
 if [ -d "venv" ]; then
-    echo "[0/4] Removing old virtual environment..."
-    rm -rf venv
+    echo "[SKIP] Virtual environment already exists"
+else
+    echo "[1/3] Creating virtual environment..."
+    $PYTHON_CMD -m venv venv
 fi
 
-echo "[1/4] Creating virtual environment..."
-$PYTHON_CMD -m venv venv
-
-echo "[2/4] Activating virtual environment..."
+echo "[2/3] Installing dependencies..."
 source venv/bin/activate
 
-echo "[3/4] Upgrading pip and installing dependencies..."
-pip install --upgrade pip
-pip install fastapi uvicorn[standard] python-multipart
-pip install python-jose[cryptography] passlib[bcrypt]
-pip install pydantic pydantic-settings
-pip install loguru httpx python-dotenv websockets
+pip install --upgrade pip -q
+pip install fastapi==0.109.0 "uvicorn[standard]==0.27.0" python-multipart==0.0.6 -q
+pip install "python-jose[cryptography]==3.3.0" "passlib[bcrypt]==1.7.4" -q
+pip install "pydantic[email]==2.5.3" pydantic-settings==2.1.0 -q
+pip install loguru==0.7.2 httpx==0.26.0 python-dotenv==1.0.0 -q
+pip install websockets==12.0 -q
+pip install firebase-admin -q
 
-echo "[4/4] Starting server..."
+echo "[3/3] Dependencies installed!"
 echo ""
+
+# Seed Firebase
 echo "=========================================="
-echo "   🅿️  PARKIFY API SERVER"
+echo "   Seeding Firebase with demo data..."
+echo "=========================================="
+python seed_firebase.py
+echo ""
+
+# Start server
+echo "=========================================="
+echo "   PARKIFY API SERVER"
 echo "=========================================="
 echo ""
-echo "   🌐 API:  http://localhost:8000"
-echo "   📚 Docs: http://localhost:8000/docs"
+echo "   API:       http://localhost:8000"
+echo "   Docs:      http://localhost:8000/docs"
+echo "   Dashboard: http://localhost:8000/dashboard"
 echo ""
-echo "   👤 Demo Accounts:"
+echo "   Demo Accounts:"
 echo "      Admin: admin@parkify.com / admin123"
-echo "      User:  user@parkify.com / user123"
+echo "      User:  amira@gmail.com   / user123"
+echo "      User:  ahmed@gmail.com   / user123"
+echo "      User:  sara@gmail.com    / user123"
+echo "      User:  omar@gmail.com    / user123"
 echo ""
 echo "   Press Ctrl+C to stop"
 echo "=========================================="
