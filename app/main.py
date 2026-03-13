@@ -164,20 +164,69 @@ async def ws_gate(websocket: WebSocket, parking_id: str, device_key: str = Query
                     "data": msg
                 })
             elif msg.get("type") == "plate_detected":
-                # ALPR detected a plate
+                # ALPR detected a plate - verify against bookings
                 print(f"Plate detected: {msg}")
-                from app.services import get_vehicle_log_service
+                from app.services import get_vehicle_log_service, get_booking_service, get_alert_service, get_notification_service, get_parking_service
+                plate = msg.get("plate", "Unknown")
+                action_type = msg.get("action", "entry")
+                gate = msg.get("gate", "Gate A")
+
                 get_vehicle_log_service().add_log(
                     parking_id=parking_id,
-                    vehicle_plate=msg.get("plate", "Unknown"),
-                    action=msg.get("action", "entry"),
-                    gate=msg.get("gate", "Gate A"),
+                    vehicle_plate=plate,
+                    action=action_type,
+                    gate=gate,
                     confidence=msg.get("confidence")
                 )
+
+                bs = get_booking_service()
+                verified = False
+                booking_id = None
+
+                if action_type == "entry":
+                    booking = bs.find_booking_by_plate(parking_id, plate, ["confirmed"])
+                    if booking:
+                        verified = True
+                        booking_id = booking["id"]
+                        bs.check_in(booking_id)
+                        await websocket.send_json({
+                            "type": "gate_command", "gate_type": "entry", "action": "open"
+                        })
+                    else:
+                        get_alert_service().create_alert(
+                            parking_id, "security", "medium",
+                            f"Unregistered vehicle: {plate} at {gate}"
+                        )
+                elif action_type == "exit":
+                    booking = bs.find_booking_by_plate(parking_id, plate, ["active"])
+                    if booking:
+                        verified = True
+                        booking_id = booking["id"]
+                        bs.check_out(booking_id)
+                        # Notify spot watchers
+                        ps = get_parking_service()
+                        watchers = ps.get_spot_watchers(parking_id)
+                        if watchers:
+                            parking_data = ps.get_parking_by_id(parking_id)
+                            ns = get_notification_service()
+                            for watcher_id in watchers:
+                                ns.create_notification(
+                                    user_id=watcher_id,
+                                    title="Spot Available!",
+                                    message=f"A spot just opened at {parking_data['name']}. Book now!",
+                                    notification_type="booking",
+                                    data={"parking_id": parking_id}
+                                )
+                                ps.remove_spot_watcher(parking_id, watcher_id)
+                    # Always open gate for exits
+                    await websocket.send_json({
+                        "type": "gate_command", "gate_type": "exit", "action": "open"
+                    })
+
                 await mgr.send_to_channel("admin", {
                     "type": "plate_detected",
                     "parking_id": parking_id,
-                    "data": msg
+                    "data": {**msg, "verified": verified, "booking_id": booking_id}
                 })
             elif msg.get("type") == "fire_alert":
                 # Fire detection model triggered
@@ -227,7 +276,12 @@ async def iot_plate_detect(
 ):
     """
     HTTP endpoint for ESP32/ALPR to report detected license plates.
-    Use this if WebSocket is not available.
+    Verifies plate against active bookings and auto-controls gate.
+
+    Flow:
+    - ENTRY: plate matched to confirmed booking → open gate + check-in
+    - EXIT: plate matched to active booking → open gate + check-out
+    - NO MATCH: gate stays closed, admin alerted about unregistered vehicle
     """
     KEYS = {"parking_1": "esp32_parking1_key", "parking_2": "esp32_parking2_key",
             "parking_3": "esp32_parking3_key", "parking_4": "esp32_parking4_key",
@@ -236,17 +290,103 @@ async def iot_plate_detect(
         from fastapi import HTTPException
         raise HTTPException(status_code=403, detail="Invalid device key")
 
-    from app.services import get_vehicle_log_service
+    from app.services import get_vehicle_log_service, get_booking_service, get_alert_service, get_notification_service
     log = get_vehicle_log_service().add_log(parking_id, plate, action, gate, confidence)
-
+    bs = get_booking_service()
     mgr = get_ws_manager()
+
+    verified = False
+    booking_id = None
+    gate_command = "none"
+    message = ""
+
+    if action == "entry":
+        # Look for a confirmed booking with this plate at this parking
+        booking = bs.find_booking_by_plate(parking_id, plate, ["confirmed"])
+        if booking:
+            verified = True
+            booking_id = booking["id"]
+            gate_command = "open"
+            message = f"Vehicle verified. Booking {booking_id} checked in."
+            # Auto check-in
+            bs.check_in(booking_id)
+            # Send gate open command to ESP32
+            await mgr.send_to_channel(f"gate:{parking_id}", {
+                "type": "gate_command",
+                "gate_type": "entry",
+                "action": "open"
+            })
+        else:
+            message = f"Unregistered vehicle {plate} at {gate}. No matching booking found."
+            # Alert admin about unregistered vehicle
+            get_alert_service().create_alert(
+                parking_id, "security", "medium",
+                f"Unregistered vehicle detected: {plate} at {gate} (confidence: {confidence})"
+            )
+
+    elif action == "exit":
+        # Look for an active booking with this plate
+        booking = bs.find_booking_by_plate(parking_id, plate, ["active"])
+        if booking:
+            verified = True
+            booking_id = booking["id"]
+            gate_command = "open"
+            message = f"Vehicle verified. Booking {booking_id} checked out."
+            # Auto check-out
+            bs.check_out(booking_id)
+            # Send gate open command
+            await mgr.send_to_channel(f"gate:{parking_id}", {
+                "type": "gate_command",
+                "gate_type": "exit",
+                "action": "open"
+            })
+            # Notify spot watchers
+            from app.services import get_parking_service
+            ps = get_parking_service()
+            watchers = ps.get_spot_watchers(parking_id)
+            if watchers:
+                parking = ps.get_parking_by_id(parking_id)
+                ns = get_notification_service()
+                for watcher_id in watchers:
+                    ns.create_notification(
+                        user_id=watcher_id,
+                        title="Spot Available!",
+                        message=f"A parking spot just opened up at {parking['name']}. Book now!",
+                        notification_type="booking",
+                        data={"parking_id": parking_id}
+                    )
+                    ps.remove_spot_watcher(parking_id, watcher_id)
+        else:
+            # Let them exit anyway, but alert admin
+            gate_command = "open"
+            message = f"Vehicle {plate} exiting without active booking. Gate opened."
+            await mgr.send_to_channel(f"gate:{parking_id}", {
+                "type": "gate_command",
+                "gate_type": "exit",
+                "action": "open"
+            })
+
+    # Broadcast to admin
     await mgr.send_to_channel("admin", {
         "type": "plate_detected",
         "parking_id": parking_id,
-        "data": {"plate": plate, "action": action, "gate": gate, "confidence": confidence}
+        "data": {
+            "plate": plate, "action": action, "gate": gate,
+            "confidence": confidence, "verified": verified,
+            "booking_id": booking_id, "gate_command": gate_command
+        }
     })
 
-    return {"success": True, "log_id": log["id"], "plate": plate, "action": action}
+    return {
+        "success": True,
+        "verified": verified,
+        "log_id": log["id"],
+        "plate": plate,
+        "action": action,
+        "gate_command": gate_command,
+        "booking_id": booking_id,
+        "message": message
+    }
 
 
 @app.post("/api/v1/iot/fire-alert", tags=["IoT / Hardware"])
@@ -279,6 +419,42 @@ async def iot_fire_alert(
         "type": "fire_alert",
         "parking_id": parking_id,
         "data": {"message": message, "confidence": confidence, "alert_id": alert["id"]}
+    })
+
+    return {"success": True, "alert_id": alert["id"]}
+
+
+@app.post("/api/v1/iot/theft-alert", tags=["IoT / Hardware"])
+async def iot_theft_alert(
+    parking_id: str = Query(...),
+    message: str = Query("Suspicious activity detected"),
+    confidence: float = Query(0.80),
+    weapon_type: str = Query("unknown", description="Detected weapon type: gun, knife, unknown"),
+    device_key: str = Query(...)
+):
+    """HTTP endpoint for theft/weapon detection system to report security alerts."""
+    KEYS = {"parking_1": "esp32_parking1_key", "parking_2": "esp32_parking2_key",
+            "parking_3": "esp32_parking3_key", "parking_4": "esp32_parking4_key",
+            "parking_5": "esp32_parking5_key"}
+    if device_key != KEYS.get(parking_id):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Invalid device key")
+
+    from app.services import get_alert_service, get_notification_service
+    alert = get_alert_service().create_alert(parking_id, "theft", "high",
+                                              f"{message} - weapon: {weapon_type} (confidence: {confidence})")
+
+    get_notification_service().broadcast_notification(
+        title="Security Alert!",
+        message=f"Suspicious activity detected at {alert['parking_name']}. Security has been notified.",
+        notification_type="security"
+    )
+
+    mgr = get_ws_manager()
+    await mgr.send_to_channel("admin", {
+        "type": "theft_alert",
+        "parking_id": parking_id,
+        "data": {"message": message, "confidence": confidence, "weapon_type": weapon_type, "alert_id": alert["id"]}
     })
 
     return {"success": True, "alert_id": alert["id"]}
@@ -318,6 +494,22 @@ async def iot_slot_update(
         elif status == "occupied" and old_status == "available":
             parking["available_slots"] -= 1
             parking["occupied_slots"] += 1
+
+    # Notify spot watchers when a slot becomes available
+    if status == "available" and old_status != "available":
+        from app.services import get_notification_service
+        watchers = ps.get_spot_watchers(parking_id)
+        if watchers and parking:
+            ns = get_notification_service()
+            for watcher_id in watchers:
+                ns.create_notification(
+                    user_id=watcher_id,
+                    title="Spot Available!",
+                    message=f"A spot just opened at {parking['name']}. Book now!",
+                    notification_type="booking",
+                    data={"parking_id": parking_id}
+                )
+                ps.remove_spot_watcher(parking_id, watcher_id)
 
     mgr = get_ws_manager()
     await mgr.send_to_channel(f"parking:{parking_id}", {

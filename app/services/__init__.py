@@ -561,6 +561,125 @@ class ParkingService:
     def get_slot_by_id(self, slot_id: str) -> Optional[dict]:
         return self._demo_slots.get(slot_id)
 
+    # ─── Parking CRUD (Admin) ─────────────────────────
+
+    def create_parking(self, data: dict) -> dict:
+        parking_id = f"parking_{uuid.uuid4().hex[:8]}"
+        total_slots = data.get("total_slots", 20)
+        parking = {
+            "id": parking_id,
+            "name": data["name"],
+            "description": data.get("description", ""),
+            "location": {
+                "latitude": data["latitude"],
+                "longitude": data["longitude"],
+                "address": data["address"],
+                "city": data.get("city"),
+                "country": data.get("country", "Egypt")
+            },
+            "parking_type": data.get("parking_type", "covered"),
+            "total_slots": total_slots,
+            "available_slots": total_slots,
+            "occupied_slots": 0,
+            "rate_per_hour": data["rate_per_hour"],
+            "currency": data.get("currency", "EGP"),
+            "amenities": data.get("amenities", []),
+            "images": [],
+            "rating": 0.0,
+            "review_count": 0,
+            "is_24_7": data.get("is_24_7", True),
+            "is_active": True
+        }
+        self._demo_parkings[parking_id] = parking
+
+        # Generate slots
+        for i in range(total_slots):
+            floor = (i // 20) + 1
+            section = chr(65 + (i // 10) % 3)
+            slot_num = (i % 10) + 1
+            slot_number = f"{section}{slot_num:02d}"
+            slot_id = f"{parking_id}_slot_{slot_number}"
+            self._demo_slots[slot_id] = {
+                "id": slot_id,
+                "parking_id": parking_id,
+                "slot_number": slot_number,
+                "floor": floor,
+                "section": section,
+                "status": "available",
+                "is_handicap": i % 10 == 0,
+                "is_ev_charging": i % 15 == 0,
+                "current_vehicle_plate": None
+            }
+
+        return parking
+
+    def update_parking(self, parking_id: str, data: dict) -> Optional[dict]:
+        parking = self._demo_parkings.get(parking_id)
+        if not parking:
+            return None
+
+        if data.get("name") is not None:
+            parking["name"] = data["name"]
+        if data.get("description") is not None:
+            parking["description"] = data["description"]
+        if data.get("latitude") is not None:
+            parking["location"]["latitude"] = data["latitude"]
+        if data.get("longitude") is not None:
+            parking["location"]["longitude"] = data["longitude"]
+        if data.get("address") is not None:
+            parking["location"]["address"] = data["address"]
+        if data.get("city") is not None:
+            parking["location"]["city"] = data["city"]
+        if data.get("parking_type") is not None:
+            parking["parking_type"] = data["parking_type"]
+        if data.get("rate_per_hour") is not None:
+            parking["rate_per_hour"] = data["rate_per_hour"]
+        if data.get("amenities") is not None:
+            parking["amenities"] = data["amenities"]
+        if data.get("is_24_7") is not None:
+            parking["is_24_7"] = data["is_24_7"]
+        if data.get("is_active") is not None:
+            parking["is_active"] = data["is_active"]
+
+        return parking
+
+    def delete_parking(self, parking_id: str) -> bool:
+        if parking_id not in self._demo_parkings:
+            return False
+        # Soft delete - deactivate
+        self._demo_parkings[parking_id]["is_active"] = False
+        return True
+
+    # ─── Spot Availability Watchers ───────────────────
+
+    def add_spot_watcher(self, parking_id: str, user_id: str) -> bool:
+        if parking_id not in self._demo_parkings:
+            return False
+        if not hasattr(self, '_spot_watchers'):
+            self._spot_watchers = {}
+        if parking_id not in self._spot_watchers:
+            self._spot_watchers[parking_id] = set()
+        self._spot_watchers[parking_id].add(user_id)
+        return True
+
+    def remove_spot_watcher(self, parking_id: str, user_id: str) -> bool:
+        if not hasattr(self, '_spot_watchers'):
+            return False
+        if parking_id not in self._spot_watchers:
+            return False
+        self._spot_watchers[parking_id].discard(user_id)
+        return True
+
+    def get_spot_watchers(self, parking_id: str) -> List[str]:
+        if not hasattr(self, '_spot_watchers'):
+            return []
+        return list(self._spot_watchers.get(parking_id, []))
+
+    def is_watching(self, parking_id: str, user_id: str) -> bool:
+        if not hasattr(self, '_spot_watchers'):
+            return False
+        return user_id in self._spot_watchers.get(parking_id, set())
+
 
 class BookingService:
     def __init__(self, parking_service: ParkingService):
@@ -712,6 +831,92 @@ class BookingService:
         b["amount"] = round(b["amount"] + extra_amount, 2)
         b["fees"] = round(b["fees"] + extra_fees, 2)
         b["total_amount"] = round(b["total_amount"] + extra_amount + extra_fees, 2)
+
+        return b
+
+    def find_booking_by_plate(self, parking_id: str, vehicle_plate: str,
+                              statuses: Optional[List[str]] = None) -> Optional[dict]:
+        """Find a booking matching a vehicle plate at a specific parking."""
+        if statuses is None:
+            statuses = ["confirmed", "active"]
+        for b in self.ps._demo_bookings.values():
+            if (b["parking_id"] == parking_id and
+                    b["vehicle_plate"] == vehicle_plate and
+                    b["status"] in statuses):
+                return b
+        return None
+
+    def check_in(self, booking_id: str) -> Optional[dict]:
+        """Check in: move confirmed → active, record actual entry time."""
+        b = self.ps._demo_bookings.get(booking_id)
+        if not b:
+            return None
+        if b["status"] != "confirmed":
+            return None
+
+        b["status"] = "active"
+        b["actual_entry_time"] = datetime.utcnow().isoformat()
+
+        # Mark slot as occupied
+        if b["slot_id"] in self.ps._demo_slots:
+            self.ps._demo_slots[b["slot_id"]]["status"] = "occupied"
+            self.ps._demo_slots[b["slot_id"]]["current_vehicle_plate"] = b["vehicle_plate"]
+
+        notif_service = get_notification_service()
+        notif_service.create_notification(
+            user_id=b["user_id"],
+            title="Welcome! You've Checked In",
+            message=f"You have entered {b['parking_name']}. Slot {b['slot_number']} is ready for you.",
+            notification_type="booking",
+            data={"booking_id": booking_id}
+        )
+
+        return b
+
+    def check_out(self, booking_id: str) -> Optional[dict]:
+        """Check out: move active → completed, calculate final price."""
+        b = self.ps._demo_bookings.get(booking_id)
+        if not b:
+            return None
+        if b["status"] != "active":
+            return None
+
+        now = datetime.utcnow()
+        b["status"] = "completed"
+        b["actual_exit_time"] = now.isoformat()
+
+        # Calculate actual duration and adjust price if overstayed
+        entry_time = datetime.fromisoformat(b.get("actual_entry_time", b["start_time"]).replace("Z", ""))
+        actual_hours = (now - entry_time).total_seconds() / 3600
+        booked_hours = b["total_hours"]
+
+        if actual_hours > booked_hours:
+            parking = self.ps.get_parking_by_id(b["parking_id"])
+            if parking:
+                extra_hours = actual_hours - booked_hours
+                extra_amount = extra_hours * parking["rate_per_hour"]
+                extra_fees = extra_amount * 0.05
+                b["total_hours"] = round(actual_hours, 2)
+                b["amount"] = round(b["amount"] + extra_amount, 2)
+                b["fees"] = round(b["fees"] + extra_fees, 2)
+                b["total_amount"] = round(b["total_amount"] + extra_amount + extra_fees, 2)
+
+        # Free up the slot
+        if b["slot_id"] in self.ps._demo_slots:
+            self.ps._demo_slots[b["slot_id"]]["status"] = "available"
+            self.ps._demo_slots[b["slot_id"]]["current_vehicle_plate"] = None
+        if b["parking_id"] in self.ps._demo_parkings:
+            self.ps._demo_parkings[b["parking_id"]]["available_slots"] += 1
+            self.ps._demo_parkings[b["parking_id"]]["occupied_slots"] -= 1
+
+        notif_service = get_notification_service()
+        notif_service.create_notification(
+            user_id=b["user_id"],
+            title="Trip Complete!",
+            message=f"You've checked out from {b['parking_name']}. Total: {b['total_amount']} {b['currency']}.",
+            notification_type="payment",
+            data={"booking_id": booking_id, "total_amount": b["total_amount"]}
+        )
 
         return b
 

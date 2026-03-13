@@ -121,3 +121,30 @@ async def get_available_slots(parking_id: str, current_user: dict = Depends(get_
     if not service.get_parking_by_id(parking_id):
         raise HTTPException(status_code=404, detail="Parking not found")
     return service.get_parking_slots(parking_id, available_only=True)
+
+
+@router.post("/{parking_id}/watch")
+async def watch_parking(parking_id: str, current_user: dict = Depends(get_current_user)):
+    """Subscribe to notifications when a spot becomes available at this parking."""
+    ps = get_parking_service()
+    if not ps.get_parking_by_id(parking_id):
+        raise HTTPException(status_code=404, detail="Parking not found")
+    ps.add_spot_watcher(parking_id, current_user["user_id"])
+    return {"success": True, "message": "You will be notified when a spot becomes available"}
+
+
+@router.delete("/{parking_id}/watch")
+async def unwatch_parking(parking_id: str, current_user: dict = Depends(get_current_user)):
+    """Unsubscribe from spot availability notifications."""
+    ps = get_parking_service()
+    ps.remove_spot_watcher(parking_id, current_user["user_id"])
+    return {"success": True, "message": "Unsubscribed from availability notifications"}
+
+
+@router.get("/{parking_id}/watch")
+async def check_watch_status(parking_id: str, current_user: dict = Depends(get_current_user)):
+    """Check if you are watching this parking for availability."""
+    ps = get_parking_service()
+    if not ps.get_parking_by_id(parking_id):
+        raise HTTPException(status_code=404, detail="Parking not found")
+    return {"is_watching": ps.is_watching(parking_id, current_user["user_id"])}

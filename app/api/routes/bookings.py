@@ -71,6 +71,30 @@ async def cancel(booking_id: str, current_user: dict = Depends(get_current_user)
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/{booking_id}/check-in", response_model=BookingResponse)
+async def check_in(booking_id: str, current_user: dict = Depends(get_current_user)):
+    """Check in to parking (e.g., scan QR at gate). Moves booking from confirmed → active."""
+    booking = get_booking_service().get_booking_by_id(booking_id)
+    if not booking or booking["user_id"] != current_user["user_id"]:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    result = get_booking_service().check_in(booking_id)
+    if not result:
+        raise HTTPException(status_code=400, detail="Cannot check in - booking is not in confirmed status")
+    return result
+
+
+@router.post("/{booking_id}/check-out", response_model=BookingResponse)
+async def check_out(booking_id: str, current_user: dict = Depends(get_current_user)):
+    """Check out from parking. Moves booking from active → completed with final price."""
+    booking = get_booking_service().get_booking_by_id(booking_id)
+    if not booking or booking["user_id"] != current_user["user_id"]:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    result = get_booking_service().check_out(booking_id)
+    if not result:
+        raise HTTPException(status_code=400, detail="Cannot check out - booking is not in active status")
+    return result
+
+
 @router.post("/{booking_id}/extend", response_model=BookingResponse)
 async def extend_booking(
     booking_id: str,
