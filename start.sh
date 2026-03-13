@@ -44,7 +44,7 @@ source venv/bin/activate
 pip install --upgrade pip -q
 pip install fastapi==0.109.0 "uvicorn[standard]==0.27.0" python-multipart==0.0.6 -q
 # Fixed bcrypt version to prevent passlib crashes
-pip install "python-jose[cryptography]==3.3.0" "passlib[bcrypt]==1.7.4" bcrypt==4.3.0 -q
+pip install "python-jose[cryptography]==3.3.0" "passlib[bcrypt]==1.7.4" bcrypt==4.0.1 -q
 pip install "pydantic[email]==2.5.3" pydantic-settings -q
 # Updated httpx to 0.28.1 to resolve firebase-admin conflict
 pip install loguru==0.7.2 httpx==0.28.1 python-dotenv==1.0.0 -q
