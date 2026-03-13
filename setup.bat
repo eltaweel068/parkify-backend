@@ -39,10 +39,13 @@ call venv\Scripts\activate.bat
 
 pip install --upgrade pip --quiet
 pip install fastapi==0.109.0 uvicorn[standard]==0.27.0 python-multipart==0.0.6 --quiet
-pip install python-jose[cryptography]==3.3.0 "passlib[bcrypt]==1.7.4" --quiet
-pip install "pydantic[email]==2.5.3" pydantic-settings==2.1.0 --quiet
-pip install loguru==0.7.2 httpx==0.26.0 python-dotenv==1.0.0 --quiet
+:: Fixed bcrypt version to prevent passlib crashes
+pip install python-jose[cryptography]==3.3.0 "passlib[bcrypt]==1.7.4" bcrypt==4.3.0 --quiet
+pip install "pydantic[email]==2.5.3" pydantic-settings --quiet
+:: Updated httpx to 0.28.1 to resolve firebase-admin conflict
+pip install loguru==0.7.2 httpx==0.28.1 python-dotenv==1.0.0 --quiet
 pip install websockets==12.0 --quiet
+:: Consolidated firebase-admin installation
 pip install firebase-admin --quiet
 
 echo [3/3] Dependencies installed!
@@ -60,9 +63,9 @@ echo ==================================================
 echo    PARKIFY API SERVER
 echo ==================================================
 echo.
-echo    API:       http://localhost:8000
-echo    Docs:      http://localhost:8000/docs
-echo    Dashboard: http://localhost:8000/dashboard
+echo    API:        http://localhost:8000
+echo    Docs:       http://localhost:8000/docs
+echo    Dashboard:  http://localhost:8000/dashboard
 echo.
 echo    Demo Accounts:
 echo       Admin: admin@parkify.com / admin123
@@ -75,6 +78,5 @@ echo    Press Ctrl+C to stop
 echo ==================================================
 echo.
 
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
+python -m uvicorn app.main:app --reload --reload-dir app --host 0.0.0.0 --port 8000
 pause
