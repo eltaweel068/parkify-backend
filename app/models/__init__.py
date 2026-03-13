@@ -428,3 +428,55 @@ class AdminSendNotificationRequest(BaseModel):
     title: str
     message: str
     notification_type: NotificationType = NotificationType.SYSTEM
+
+
+# ─── Admin Parking CRUD ──────────────────────────────
+
+class ParkingCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    latitude: float
+    longitude: float
+    address: str
+    city: Optional[str] = None
+    country: str = "Egypt"
+    parking_type: str = "covered"  # "covered", "uncovered", "multi_level"
+    total_slots: int
+    rate_per_hour: float
+    currency: str = "EGP"
+    amenities: List[str] = []
+    is_24_7: bool = True
+
+
+class ParkingUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    parking_type: Optional[str] = None
+    rate_per_hour: Optional[float] = None
+    amenities: Optional[List[str]] = None
+    is_24_7: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+
+# ─── Admin User Management ───────────────────────────
+
+class UserStatusUpdate(BaseModel):
+    is_active: bool
+    reason: Optional[str] = None
+
+
+# ─── ALPR Verification Response ──────────────────────
+
+class PlateVerificationResponse(BaseModel):
+    success: bool
+    verified: bool
+    log_id: str
+    plate: str
+    action: str
+    gate_command: str  # "open" or "none"
+    booking_id: Optional[str] = None
+    message: str

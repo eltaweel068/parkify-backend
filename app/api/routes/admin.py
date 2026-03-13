@@ -4,7 +4,8 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Optional
 from app.models import (
     DashboardStats, GateControlRequest, AlertResponse,
-    VehicleLogResponse, AdminSendNotificationRequest, SupportTicketResponse
+    VehicleLogResponse, AdminSendNotificationRequest, SupportTicketResponse,
+    ParkingCreate, ParkingUpdate, ParkingResponse, UserStatusUpdate
 )
 from app.core.security import get_current_admin
 from app.services import (
@@ -172,12 +173,36 @@ async def update_ticket_status(
     return ticket
 
 
-# ─── Parking Management ─────────────────────────────
+# ─── Parking Management (CRUD) ──────────────────────
 
 @router.get("/parkings")
 async def admin_get_parkings(current_user: dict = Depends(get_current_admin)):
     """Get all parkings with full details for admin."""
     return get_parking_service().get_all_parkings()
+
+
+@router.post("/parkings", response_model=ParkingResponse)
+async def admin_create_parking(data: ParkingCreate, current_user: dict = Depends(get_current_admin)):
+    """Create a new parking location."""
+    parking = get_parking_service().create_parking(data.model_dump())
+    return parking
+
+
+@router.put("/parkings/{parking_id}", response_model=ParkingResponse)
+async def admin_update_parking(parking_id: str, data: ParkingUpdate, current_user: dict = Depends(get_current_admin)):
+    """Update parking details (rates, amenities, status, etc.)."""
+    parking = get_parking_service().update_parking(parking_id, data.model_dump(exclude_none=True))
+    if not parking:
+        raise HTTPException(status_code=404, detail="Parking not found")
+    return parking
+
+
+@router.delete("/parkings/{parking_id}")
+async def admin_delete_parking(parking_id: str, current_user: dict = Depends(get_current_admin)):
+    """Deactivate a parking location (soft delete)."""
+    if not get_parking_service().delete_parking(parking_id):
+        raise HTTPException(status_code=404, detail="Parking not found")
+    return {"success": True, "message": f"Parking {parking_id} deactivated"}
 
 
 @router.get("/parkings/{parking_id}/slots")
@@ -187,3 +212,43 @@ async def admin_get_slots(parking_id: str, current_user: dict = Depends(get_curr
     if not ps.get_parking_by_id(parking_id):
         raise HTTPException(status_code=404, detail="Parking not found")
     return ps.get_parking_slots(parking_id)
+
+
+# ─── User Management ────────────────────────────────
+
+@router.put("/users/{user_id}/suspend")
+async def suspend_user(user_id: str, data: UserStatusUpdate, current_user: dict = Depends(get_current_admin)):
+    """Suspend or activate a user account."""
+    ps = get_parking_service()
+    user = ps._demo_users.get(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user["role"] == "admin":
+        raise HTTPException(status_code=400, detail="Cannot modify admin accounts")
+
+    user["is_active"] = data.is_active
+    status = "activated" if data.is_active else "suspended"
+
+    if not data.is_active and data.reason:
+        get_notification_service().create_notification(
+            user_id=user_id,
+            title="Account Suspended",
+            message=f"Your account has been suspended. Reason: {data.reason}",
+            notification_type="security"
+        )
+
+    return {"success": True, "user_id": user_id, "status": status, "is_active": data.is_active}
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(user_id: str, current_user: dict = Depends(get_current_admin)):
+    """Delete a user account."""
+    ps = get_parking_service()
+    user = ps._demo_users.get(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user["role"] == "admin":
+        raise HTTPException(status_code=400, detail="Cannot delete admin accounts")
+
+    del ps._demo_users[user_id]
+    return {"success": True, "message": f"User {user_id} deleted"}
