@@ -395,15 +395,68 @@
 
     <!-- PARKINGS -->
     <div class="section" id="section-parkings">
+        <div class="grid-2" style="margin-bottom:20px">
+            <div class="card">
+                <div class="card-head"><h3>Create New Parking</h3></div>
+                <div class="card-body">
+                    <div class="grid-2" style="margin-bottom:0;gap:12px">
+                        <div class="form-group"><label>Name</label><input class="form-control" id="cpName" placeholder="e.g. Cairo Mall Parking"></div>
+                        <div class="form-group"><label>Address</label><input class="form-control" id="cpAddress" placeholder="e.g. 123 Main St"></div>
+                        <div class="form-group"><label>City</label><input class="form-control" id="cpCity" placeholder="e.g. Cairo"></div>
+                        <div class="form-group"><label>Country</label><input class="form-control" id="cpCountry" value="Egypt"></div>
+                        <div class="form-group"><label>Latitude</label><input class="form-control" id="cpLat" type="number" step="any" placeholder="30.0444"></div>
+                        <div class="form-group"><label>Longitude</label><input class="form-control" id="cpLng" type="number" step="any" placeholder="31.2357"></div>
+                        <div class="form-group"><label>Total Slots</label><input class="form-control" id="cpSlots" type="number" placeholder="50"></div>
+                        <div class="form-group"><label>Rate/Hour (EGP)</label><input class="form-control" id="cpRate" type="number" step="0.5" placeholder="15"></div>
+                        <div class="form-group"><label>Type</label>
+                            <select class="form-control" id="cpType"><option value="covered">Covered</option><option value="underground">Underground</option><option value="open">Open Air</option><option value="multi_story">Multi Story</option></select>
+                        </div>
+                        <div class="form-group"><label>24/7</label>
+                            <select class="form-control" id="cp247"><option value="true">Yes</option><option value="false">No</option></select>
+                        </div>
+                    </div>
+                    <div class="form-group"><label>Description</label><input class="form-control" id="cpDesc" placeholder="Optional description"></div>
+                    <div class="form-group"><label>Amenities <span style="font-weight:400;color:var(--text3)">(comma separated)</span></label><input class="form-control" id="cpAmenities" placeholder="CCTV, EV Charging, Covered"></div>
+                    <button class="btn btn-accent" onclick="createParking()" style="width:100%">Create Parking</button>
+                    <div id="cpResult"></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-head"><h3>Edit Parking</h3></div>
+                <div class="card-body">
+                    <div class="form-group"><label>Select Parking</label><select class="form-control" id="epSelect" onchange="fillEditParking()"></select></div>
+                    <div class="grid-2" style="margin-bottom:0;gap:12px">
+                        <div class="form-group"><label>Name</label><input class="form-control" id="epName"></div>
+                        <div class="form-group"><label>Address</label><input class="form-control" id="epAddress"></div>
+                        <div class="form-group"><label>Rate/Hour</label><input class="form-control" id="epRate" type="number" step="0.5"></div>
+                        <div class="form-group"><label>Type</label>
+                            <select class="form-control" id="epType"><option value="covered">Covered</option><option value="underground">Underground</option><option value="open">Open Air</option><option value="multi_story">Multi Story</option></select>
+                        </div>
+                        <div class="form-group"><label>24/7</label>
+                            <select class="form-control" id="ep247"><option value="true">Yes</option><option value="false">No</option></select>
+                        </div>
+                        <div class="form-group"><label>Active</label>
+                            <select class="form-control" id="epActive"><option value="true">Active</option><option value="false">Inactive</option></select>
+                        </div>
+                    </div>
+                    <div class="form-group"><label>Amenities</label><input class="form-control" id="epAmenities"></div>
+                    <div class="btn-row">
+                        <button class="btn btn-accent" onclick="updateParking()">Save Changes</button>
+                        <button class="btn btn-danger" onclick="deleteParking()">Delete Parking</button>
+                    </div>
+                    <div id="epResult"></div>
+                </div>
+            </div>
+        </div>
         <div class="park-grid" id="parkingsList"></div>
     </div>
 
     <!-- BOOKINGS -->
     <div class="section" id="section-bookings">
         <div class="card">
-            <div class="card-head"><h3>All Bookings</h3></div>
+            <div class="card-head"><h3>All Bookings</h3><button class="btn btn-sm btn-outline" onclick="loadBookings()">Refresh</button></div>
             <div class="card-body flush"><div class="table-wrap">
-                <table><thead><tr><th>Booking</th><th>User</th><th>Parking</th><th>Slot</th><th>Plate</th><th>Status</th><th>Amount</th><th>Date</th></tr></thead>
+                <table><thead><tr><th>Booking</th><th>User</th><th>Parking</th><th>Slot</th><th>Plate</th><th>Status</th><th>Amount</th><th>Date</th><th>Actions</th></tr></thead>
                 <tbody id="bookingsTable"></tbody></table>
             </div></div>
         </div>
@@ -412,9 +465,9 @@
     <!-- USERS -->
     <div class="section" id="section-users">
         <div class="card">
-            <div class="card-head"><h3>All Users</h3></div>
+            <div class="card-head"><h3>All Users</h3><button class="btn btn-sm btn-outline" onclick="loadUsers()">Refresh</button></div>
             <div class="card-body flush"><div class="table-wrap">
-                <table><thead><tr><th>User</th><th>Email</th><th>Phone</th><th>Role</th><th>Cars</th><th>Joined</th></tr></thead>
+                <table><thead><tr><th>User</th><th>Email</th><th>Phone</th><th>Role</th><th>Status</th><th>Cars</th><th>Joined</th><th>Actions</th></tr></thead>
                 <tbody id="usersTable"></tbody></table>
             </div></div>
         </div>
@@ -564,24 +617,131 @@ function renderParkings(parkings,target){
     }).join('');
 }
 
-async function loadParkings(){const p=await api('/api/v1/admin/parkings');renderParkings(p,'parkingsList')}
+let allParkings=[];
+async function loadParkings(){
+    allParkings=await api('/api/v1/admin/parkings');
+    renderParkings(allParkings,'parkingsList');
+    const sel=document.getElementById('epSelect');
+    sel.innerHTML=allParkings.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+    fillEditParking();
+}
+function fillEditParking(){
+    const id=document.getElementById('epSelect').value;
+    const p=allParkings.find(x=>x.id===id);if(!p)return;
+    document.getElementById('epName').value=p.name;
+    document.getElementById('epAddress').value=p.location?.address||'';
+    document.getElementById('epRate').value=p.rate_per_hour;
+    document.getElementById('epType').value=p.parking_type;
+    document.getElementById('ep247').value=String(p.is_24_7!==false);
+    document.getElementById('epActive').value=String(p.is_active!==false);
+    document.getElementById('epAmenities').value=(p.amenities||[]).join(', ');
+}
+async function createParking(){
+    const name=document.getElementById('cpName').value,address=document.getElementById('cpAddress').value;
+    const lat=parseFloat(document.getElementById('cpLat').value),lng=parseFloat(document.getElementById('cpLng').value);
+    const slots=parseInt(document.getElementById('cpSlots').value),rate=parseFloat(document.getElementById('cpRate').value);
+    if(!name||!address||isNaN(lat)||isNaN(lng)||isNaN(slots)||isNaN(rate)){
+        document.getElementById('cpResult').innerHTML='<div class="toast toast-err">Fill all required fields</div>';return;
+    }
+    const body={name,address,latitude:lat,longitude:lng,total_slots:slots,rate_per_hour:rate,
+        description:document.getElementById('cpDesc').value||undefined,
+        city:document.getElementById('cpCity').value||undefined,
+        country:document.getElementById('cpCountry').value||'Egypt',
+        parking_type:document.getElementById('cpType').value,
+        is_24_7:document.getElementById('cp247').value==='true',
+        amenities:document.getElementById('cpAmenities').value?document.getElementById('cpAmenities').value.split(',').map(s=>s.trim()).filter(Boolean):[]
+    };
+    try{
+        const r=await fetch(`${API}/api/v1/admin/parkings`,{method:'POST',headers:auth(),body:JSON.stringify(body)});
+        const d=await r.json();
+        if(!r.ok)throw new Error(d.detail||'Failed');
+        document.getElementById('cpResult').innerHTML=`<div class="toast toast-ok">Created: ${d.name} (${d.total_slots} slots)</div>`;
+        ['cpName','cpAddress','cpCity','cpLat','cpLng','cpSlots','cpRate','cpDesc','cpAmenities'].forEach(id=>document.getElementById(id).value='');
+        document.getElementById('cpCountry').value='Egypt';
+        loadParkings();refreshData();
+    }catch(e){document.getElementById('cpResult').innerHTML=`<div class="toast toast-err">${e.message}</div>`}
+}
+async function updateParking(){
+    const id=document.getElementById('epSelect').value;if(!id)return;
+    const body={name:document.getElementById('epName').value||undefined,
+        address:document.getElementById('epAddress').value||undefined,
+        rate_per_hour:parseFloat(document.getElementById('epRate').value)||undefined,
+        parking_type:document.getElementById('epType').value,
+        is_24_7:document.getElementById('ep247').value==='true',
+        is_active:document.getElementById('epActive').value==='true',
+        amenities:document.getElementById('epAmenities').value?document.getElementById('epAmenities').value.split(',').map(s=>s.trim()).filter(Boolean):undefined
+    };
+    try{
+        const r=await fetch(`${API}/api/v1/admin/parkings/${id}`,{method:'PUT',headers:auth(),body:JSON.stringify(body)});
+        const d=await r.json();
+        if(!r.ok)throw new Error(d.detail||'Failed');
+        document.getElementById('epResult').innerHTML=`<div class="toast toast-ok">Updated successfully</div>`;
+        loadParkings();refreshData();
+    }catch(e){document.getElementById('epResult').innerHTML=`<div class="toast toast-err">${e.message}</div>`}
+}
+async function deleteParking(){
+    const id=document.getElementById('epSelect').value;if(!id)return;
+    if(!confirm('Are you sure you want to deactivate this parking?'))return;
+    try{
+        const r=await fetch(`${API}/api/v1/admin/parkings/${id}`,{method:'DELETE',headers:auth()});
+        const d=await r.json();
+        if(!r.ok)throw new Error(d.detail||'Failed');
+        document.getElementById('epResult').innerHTML=`<div class="toast toast-ok">Parking deactivated</div>`;
+        loadParkings();refreshData();
+    }catch(e){document.getElementById('epResult').innerHTML=`<div class="toast toast-err">${e.message}</div>`}
+}
 
 async function loadBookings(){
     const b=await api('/api/v1/admin/bookings');
-    document.getElementById('bookingsTable').innerHTML=b.length?b.map(b=>
-        `<tr><td style="font-weight:600;font-size:12px">${b.id.substring(0,16)}</td><td>${b.user_id}</td><td>${b.parking_name}</td><td>${b.slot_number}</td><td style="font-weight:600">${b.vehicle_plate}</td>
-        <td><span class="badge badge-${b.status}">${b.status}</span></td><td style="font-weight:600">${b.total_amount} ${b.currency}</td><td>${new Date(b.created_at).toLocaleString()}</td></tr>`
-    ).join(''):'<tr><td colspan="8"><div class="empty-state">No bookings yet</div></td></tr>';
+    document.getElementById('bookingsTable').innerHTML=b.length?b.map(b=>{
+        let actions='';
+        if(b.status==='confirmed')actions=`<button class="btn btn-sm btn-accent" onclick="bookingAction('${b.id}','check-in')">Check In</button>`;
+        else if(b.status==='active')actions=`<button class="btn btn-sm btn-outline" onclick="bookingAction('${b.id}','check-out')">Check Out</button>`;
+        else actions=`<span style="color:var(--text3);font-size:11px">—</span>`;
+        return`<tr><td style="font-weight:600;font-size:12px">${b.id.substring(0,16)}</td><td>${b.user_id}</td><td>${b.parking_name}</td><td>${b.slot_number}</td><td style="font-weight:600">${b.vehicle_plate}</td>
+        <td><span class="badge badge-${b.status}">${b.status}</span></td><td style="font-weight:600">${b.total_amount} ${b.currency}</td><td>${new Date(b.created_at).toLocaleString()}</td><td>${actions}</td></tr>`;
+    }).join(''):'<tr><td colspan="9"><div class="empty-state">No bookings yet</div></td></tr>';
+}
+async function bookingAction(id,action){
+    try{
+        const r=await fetch(`${API}/api/v1/bookings/${id}/${action}`,{method:'POST',headers:auth()});
+        const d=await r.json();
+        if(!r.ok)throw new Error(d.detail||'Failed');
+        loadBookings();refreshData();
+    }catch(e){alert(e.message)}
 }
 
 async function loadUsers(){
     const u=await api('/api/v1/admin/users');
-    document.getElementById('usersTable').innerHTML=u.map(u=>
-        `<tr><td><div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:8px;background:${u.role==='admin'?'#faf5ff':'#f0fdf4'};display:grid;place-items:center;font-size:12px;font-weight:700;color:${u.role==='admin'?'#7c3aed':'#16a34a'}">${(u.name||'?')[0]}</div><div><div style="font-weight:600">${u.name}</div><div style="font-size:11px;color:var(--text3)">${u.id}</div></div></div></td>
+    document.getElementById('usersTable').innerHTML=u.map(u=>{
+        const isActive=u.is_active!==false;
+        let actions='';
+        if(u.role!=='admin'){
+            actions=`<button class="btn btn-sm ${isActive?'btn-outline':'btn-accent'}" onclick="toggleUser('${u.id}',${!isActive})">${isActive?'Suspend':'Activate'}</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}','${u.name}')" style="margin-left:4px">Delete</button>`;
+        }else{actions='<span style="color:var(--text3);font-size:11px">Protected</span>'}
+        return`<tr><td><div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:8px;background:${u.role==='admin'?'#faf5ff':'#f0fdf4'};display:grid;place-items:center;font-size:12px;font-weight:700;color:${u.role==='admin'?'#7c3aed':'#16a34a'}">${(u.name||'?')[0]}</div><div><div style="font-weight:600">${u.name}</div><div style="font-size:11px;color:var(--text3)">${u.id}</div></div></div></td>
         <td>${u.email}</td><td>${u.phone||'-'}</td>
         <td><span class="badge badge-${u.role}">${u.role}</span></td>
-        <td>${(u.cars||[]).length}</td><td>${u.created_at?new Date(u.created_at).toLocaleDateString():'-'}</td></tr>`
-    ).join('');
+        <td><span class="badge ${isActive?'badge-active':'badge-cancelled'}">${isActive?'Active':'Suspended'}</span></td>
+        <td>${(u.cars||[]).length}</td><td>${u.created_at?new Date(u.created_at).toLocaleDateString():'-'}</td>
+        <td>${actions}</td></tr>`;
+    }).join('');
+}
+async function toggleUser(id,activate){
+    try{
+        const r=await fetch(`${API}/api/v1/admin/users/${id}/suspend`,{method:'PUT',headers:auth(),body:JSON.stringify({is_active:activate,reason:activate?'Reactivated by admin':'Suspended by admin'})});
+        const d=await r.json();if(!r.ok)throw new Error(d.detail||'Failed');
+        loadUsers();refreshData();
+    }catch(e){alert(e.message)}
+}
+async function deleteUser(id,name){
+    if(!confirm(`Are you sure you want to delete user "${name}"? This cannot be undone.`))return;
+    try{
+        const r=await fetch(`${API}/api/v1/admin/users/${id}`,{method:'DELETE',headers:auth()});
+        const d=await r.json();if(!r.ok)throw new Error(d.detail||'Failed');
+        loadUsers();refreshData();
+    }catch(e){alert(e.message)}
 }
 
 async function loadAlerts(){
