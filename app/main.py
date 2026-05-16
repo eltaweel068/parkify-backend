@@ -18,10 +18,6 @@ app = FastAPI(
     description="""
     Smart Parking Management System API
 
-    ## Demo Accounts
-    - **Admin:** admin@parkify.com / admin123
-    - **User:** user@parkify.com / user123
-
     ## Features
     - JWT Authentication (email/password + social login)
     - Password Reset (email & phone OTP)
@@ -66,11 +62,7 @@ async def root():
         "message": "Welcome to Parkify API",
         "version": "3.0.0",
         "docs": "/docs",
-        "admin_dashboard": "/dashboard",
-        "demo_accounts": {
-            "admin": "admin@parkify.com / admin123",
-            "user": "user@parkify.com / user123"
-        }
+        "admin_dashboard": "/dashboard"
     }
 
 
@@ -264,6 +256,38 @@ async def ws_gate(websocket: WebSocket, parking_id: str, device_key: str = Query
 
 
 # ─── IoT / Hardware Endpoints ────────────────────────
+
+@app.get("/api/v1/iot/parking-status", tags=["IoT / Hardware"])
+async def iot_parking_status(
+    parking_id: str = Query(...),
+    device_key: str = Query(...)
+):
+    """Get parking capacity status for IoT clients (no JWT required)."""
+    KEYS = {"parking_1": "esp32_parking1_key", "parking_2": "esp32_parking2_key",
+            "parking_3": "esp32_parking3_key", "parking_4": "esp32_parking4_key",
+            "parking_5": "esp32_parking5_key"}
+    if device_key != KEYS.get(parking_id):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Invalid device key")
+
+    from app.services import get_parking_service
+    ps = get_parking_service()
+    parking = ps.get_parking_by_id(parking_id)
+    if not parking:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Parking not found")
+
+    ps.sync_parking_capacity(parking)
+
+    return {
+        "success": True,
+        "parking_id": parking_id,
+        "total_slots": parking["total_slots"],
+        "occupied_slots": parking["occupied_slots"],
+        "available_slots": parking["available_slots"],
+        "is_full": parking["is_full"]
+    }
+
 
 @app.post("/api/v1/iot/plate-detect", tags=["IoT / Hardware"])
 async def iot_plate_detect(
@@ -494,6 +518,7 @@ async def iot_slot_update(
         elif status == "occupied" and old_status == "available":
             parking["available_slots"] -= 1
             parking["occupied_slots"] += 1
+        ps.sync_parking_capacity(parking)
 
     # Notify spot watchers when a slot becomes available
     if status == "available" and old_status != "available":
@@ -526,7 +551,14 @@ async def iot_slot_update(
         "status": status
     })
 
-    return {"success": True, "slot_id": slot_id, "status": status}
+    response = {"success": True, "slot_id": slot_id, "status": status}
+    if parking:
+        response.update({
+            "occupied_slots": parking["occupied_slots"],
+            "available_slots": parking["available_slots"],
+            "is_full": parking["is_full"]
+        })
+    return response
 
 
 @app.post("/api/v1/iot/gate-control", tags=["IoT / Hardware"])
@@ -562,9 +594,6 @@ if __name__ == "__main__":
     print(f"\n  API:       http://localhost:8000")
     print(f"  Docs:      http://localhost:8000/docs")
     print(f"  Dashboard: http://localhost:8000/dashboard")
-    print(f"\n  Demo Accounts:")
-    print(f"    Admin: admin@parkify.com / admin123")
-    print(f"    User:  amira@gmail.com   / user123")
     print("\n" + "="*50 + "\n")
 
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

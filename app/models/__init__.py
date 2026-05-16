@@ -224,6 +224,7 @@ class ParkingResponse(BaseModel):
     total_slots: int
     available_slots: int
     occupied_slots: int = 0
+    is_full: bool = False
     rate_per_hour: float
     currency: str = "EGP"
     amenities: List[str] = []
