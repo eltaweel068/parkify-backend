@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     FIREBASE_PRIVATE_KEY: Optional[str] = None
     FIREBASE_CLIENT_EMAIL: Optional[str] = None
     
-    DEMO_MODE: bool = True
+    DEMO_MODE: bool = False
     
     class Config:
         env_file = ".env"

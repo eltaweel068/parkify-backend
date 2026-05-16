@@ -236,6 +236,7 @@ parkings_data = {
 }
 
 for pid, data in parkings_data.items():
+    data["is_full"] = data["occupied_slots"] >= data["total_slots"]
     db.collection("parkings").document(pid).set(data)
 print(f"  {len(parkings_data)} parkings written")
 

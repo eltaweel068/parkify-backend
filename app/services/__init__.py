@@ -9,6 +9,7 @@ import json
 import hashlib
 
 from passlib.context import CryptContext
+from app.core.config import settings
 _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _ADMIN_HASH = _pwd_ctx.hash("admin123")
 _USER_HASH = _pwd_ctx.hash("user123")
@@ -33,6 +34,7 @@ class ParkingService:
                 "total_slots": 50,
                 "available_slots": 35,
                 "occupied_slots": 15,
+                "is_full": False,
                 "rate_per_hour": 20.0,
                 "currency": "EGP",
                 "amenities": ["covered", "cctv", "ev_charger", "24_7", "security"],
@@ -57,6 +59,7 @@ class ParkingService:
                 "total_slots": 80,
                 "available_slots": 42,
                 "occupied_slots": 38,
+                "is_full": False,
                 "rate_per_hour": 15.0,
                 "currency": "EGP",
                 "amenities": ["covered", "cctv", "24_7"],
@@ -81,6 +84,7 @@ class ParkingService:
                 "total_slots": 100,
                 "available_slots": 78,
                 "occupied_slots": 22,
+                "is_full": False,
                 "rate_per_hour": 10.0,
                 "currency": "EGP",
                 "amenities": ["cctv", "24_7"],
@@ -105,6 +109,7 @@ class ParkingService:
                 "total_slots": 120,
                 "available_slots": 65,
                 "occupied_slots": 55,
+                "is_full": False,
                 "rate_per_hour": 25.0,
                 "currency": "EGP",
                 "amenities": ["covered", "cctv", "ev_charger", "24_7", "security", "valet"],
@@ -129,6 +134,7 @@ class ParkingService:
                 "total_slots": 60,
                 "available_slots": 12,
                 "occupied_slots": 48,
+                "is_full": False,
                 "rate_per_hour": 12.0,
                 "currency": "EGP",
                 "amenities": ["cctv", "security"],
@@ -153,6 +159,7 @@ class ParkingService:
                 "total_slots": 200,
                 "available_slots": 140,
                 "occupied_slots": 60,
+                "is_full": False,
                 "rate_per_hour": 15.0,
                 "currency": "EGP",
                 "amenities": ["covered", "cctv", "ev_charger", "24_7", "security"],
@@ -177,6 +184,7 @@ class ParkingService:
                 "total_slots": 300,
                 "available_slots": 180,
                 "occupied_slots": 120,
+                "is_full": False,
                 "rate_per_hour": 18.0,
                 "currency": "EGP",
                 "amenities": ["covered", "cctv", "ev_charger", "24_7", "security", "valet"],
@@ -343,6 +351,38 @@ class ParkingService:
 
         # Support tickets
         self._support_tickets = {}
+
+        if not settings.DEMO_MODE:
+            self._clear_demo_seed_data()
+        else:
+            for parking in self._demo_parkings.values():
+                self.sync_parking_capacity(parking)
+
+    def _clear_demo_seed_data(self):
+        self._demo_parkings = {}
+        self._demo_slots = {}
+        self._demo_bookings = {}
+        self._demo_users = {}
+        self._notifications = {}
+        self._alerts = {}
+        self._vehicle_logs = {}
+
+    def sync_parking_capacity(self, parking: dict):
+        total_slots = max(0, int(parking.get("total_slots", 0)))
+        occupied_slots = max(0, int(parking.get("occupied_slots", 0)))
+        available_slots = max(0, int(parking.get("available_slots", 0)))
+
+        if occupied_slots > total_slots:
+            occupied_slots = total_slots
+
+        expected_available = max(0, total_slots - occupied_slots)
+        if available_slots != expected_available:
+            available_slots = expected_available
+
+        parking["total_slots"] = total_slots
+        parking["occupied_slots"] = occupied_slots
+        parking["available_slots"] = available_slots
+        parking["is_full"] = occupied_slots >= total_slots
 
     def _init_demo_notifications(self):
         now = datetime.utcnow()
@@ -581,6 +621,7 @@ class ParkingService:
             "total_slots": total_slots,
             "available_slots": total_slots,
             "occupied_slots": 0,
+            "is_full": False,
             "rate_per_hour": data["rate_per_hour"],
             "currency": data.get("currency", "EGP"),
             "amenities": data.get("amenities", []),
@@ -590,6 +631,7 @@ class ParkingService:
             "is_24_7": data.get("is_24_7", True),
             "is_active": True
         }
+        self.sync_parking_capacity(parking)
         self._demo_parkings[parking_id] = parking
 
         # Generate slots
@@ -641,6 +683,7 @@ class ParkingService:
         if data.get("is_active") is not None:
             parking["is_active"] = data["is_active"]
 
+        self.sync_parking_capacity(parking)
         return parking
 
     def delete_parking(self, parking_id: str) -> bool:
@@ -726,6 +769,7 @@ class BookingService:
         self.ps._demo_slots[slot["id"]]["status"] = "reserved"
         self.ps._demo_parkings[parking["id"]]["available_slots"] -= 1
         self.ps._demo_parkings[parking["id"]]["occupied_slots"] += 1
+        self.ps.sync_parking_capacity(self.ps._demo_parkings[parking["id"]])
         self.ps._demo_bookings[booking_id] = booking
 
         # Create notification for booking
@@ -796,6 +840,7 @@ class BookingService:
         if b["parking_id"] in self.ps._demo_parkings:
             self.ps._demo_parkings[b["parking_id"]]["available_slots"] += 1
             self.ps._demo_parkings[b["parking_id"]]["occupied_slots"] -= 1
+            self.ps.sync_parking_capacity(self.ps._demo_parkings[b["parking_id"]])
 
         notif_service = get_notification_service()
         notif_service.create_notification(
@@ -908,6 +953,7 @@ class BookingService:
         if b["parking_id"] in self.ps._demo_parkings:
             self.ps._demo_parkings[b["parking_id"]]["available_slots"] += 1
             self.ps._demo_parkings[b["parking_id"]]["occupied_slots"] -= 1
+            self.ps.sync_parking_capacity(self.ps._demo_parkings[b["parking_id"]])
 
         notif_service = get_notification_service()
         notif_service.create_notification(

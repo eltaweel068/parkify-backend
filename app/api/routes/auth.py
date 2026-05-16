@@ -105,7 +105,7 @@ async def forgot_password_email(data: ForgotPasswordEmailRequest):
     if not user:
         raise HTTPException(status_code=404, detail="No account found with this email")
 
-    code = auth.generate_reset_code(data.email)
+    auth.generate_reset_code(data.email)
 
     masked_email = data.email[0] + "****@" + data.email.split("@")[1]
 
@@ -113,9 +113,7 @@ async def forgot_password_email(data: ForgotPasswordEmailRequest):
         "success": True,
         "message": f"Verification code sent to {masked_email}",
         "masked_identifier": masked_email,
-        "method": "email",
-        # In production, remove this. Included for demo/testing only.
-        "demo_code": code
+        "method": "email"
     }
 
 
@@ -127,7 +125,7 @@ async def forgot_password_phone(data: ForgotPasswordPhoneRequest):
     if not user:
         raise HTTPException(status_code=404, detail="No account found with this phone number")
 
-    code = auth.generate_reset_code(data.phone)
+    auth.generate_reset_code(data.phone)
 
     masked_phone = data.phone[:4] + "****" + data.phone[-2:]
 
@@ -135,8 +133,7 @@ async def forgot_password_phone(data: ForgotPasswordPhoneRequest):
         "success": True,
         "message": f"Verification code sent to {masked_phone}",
         "masked_identifier": masked_phone,
-        "method": "phone",
-        "demo_code": code
+        "method": "phone"
     }
 
 
@@ -170,12 +167,11 @@ async def resend_code(data: ResendCodeRequest):
     if not user:
         raise HTTPException(status_code=404, detail="Account not found")
 
-    code = auth.generate_reset_code(identifier)
+    auth.generate_reset_code(identifier)
 
     return {
         "success": True,
-        "message": "New verification code sent",
-        "demo_code": code
+        "message": "New verification code sent"
     }
 
 

@@ -5,15 +5,9 @@
 **Interactive Docs:** `http://localhost:8000/docs`
 **Admin Dashboard:** `http://localhost:8000/dashboard`
 
-## Demo Accounts
+## Demo Data
 
-| Role  | Email               | Password  |
-|-------|---------------------|-----------|
-| Admin | admin@parkify.com   | admin123  |
-| User  | amira@gmail.com     | user123   |
-| User  | ahmed@gmail.com     | user123   |
-| User  | sara@gmail.com      | user123   |
-| User  | omar@gmail.com      | user123   |
+`DEMO_MODE` is disabled by default, so API responses do not include preloaded dummy users, parkings, notifications, or alerts.
 
 ## Authentication
 
@@ -68,11 +62,7 @@ Returns API welcome info and links.
   "message": "Welcome to Parkify API",
   "version": "3.0.0",
   "docs": "/docs",
-  "admin_dashboard": "/dashboard",
-  "demo_accounts": {
-    "admin": "admin@parkify.com / admin123",
-    "user": "user@parkify.com / user123"
-  }
+  "admin_dashboard": "/dashboard"
 }
 ```
 
@@ -197,12 +187,13 @@ Send a 6-digit password reset code to the user's email.
 ```json
 {
   "success": true,
-  "message": "Reset code sent to email",
-  "code": "123456"
+  "message": "Verification code sent to a****@gmail.com",
+  "masked_identifier": "a****@gmail.com",
+  "method": "email"
 }
 ```
 
-**What it does:** Looks up the user by email, generates a random 6-digit code with 15 min expiry, and stores it. In production, this would send an actual email; in demo mode, the code is returned in the response.
+**What it does:** Looks up the user by email, generates a random 6-digit code with 15 min expiry, and stores it for verification. The code is not returned in API responses.
 
 ---
 
@@ -547,7 +538,7 @@ List all active parkings.
 
 **Auth:** Bearer Token (User)
 
-**Response:** `List[ParkingResponse]` — each includes `is_favorited` flag for the current user.
+**Response:** `List[ParkingResponse]` — each includes `is_favorited` and `is_full` flags for the current user/context.
 
 **What it does:** Returns all parkings from the database, enriched with whether the current user has favorited each one.
 
@@ -643,7 +634,7 @@ Get detailed info for a specific parking.
 
 **Response:** `ParkingResponse`
 
-**What it does:** Returns full parking details including slot counts, rates, amenities, rating, and favorite status.
+**What it does:** Returns full parking details including slot counts (`total_slots`, `available_slots`, `occupied_slots`), `is_full`, rates, amenities, rating, and favorite status.
 
 ---
 
@@ -1500,6 +1491,34 @@ These endpoints are for ESP32 devices and AI detection systems. They use `device
 
 ---
 
+### `GET /api/v1/iot/parking-status`
+
+Get parking capacity counters for IoT clients.
+
+**Auth:** device_key query parameter
+
+**Query Parameters:**
+| Parameter  | Type   | Required | Description          |
+|------------|--------|----------|----------------------|
+| parking_id | string | Yes      | Parking location ID  |
+| device_key | string | Yes      | Device auth key      |
+
+**Response:**
+```json
+{
+  "success": true,
+  "parking_id": "parking_1",
+  "total_slots": 50,
+  "occupied_slots": 21,
+  "available_slots": 29,
+  "is_full": false
+}
+```
+
+**What it does:** Validates the IoT device key, returns live parking counters, and indicates full state with `is_full`.
+
+---
+
 ### `POST /api/v1/iot/plate-detect`
 
 ALPR plate detection with automatic booking verification and gate control.
@@ -1623,15 +1642,19 @@ Report slot occupancy change from ESP32 sensors.
 {
   "success": true,
   "slot_id": "parking_1_slot_A05",
-  "status": "available"
+  "status": "available",
+  "occupied_slots": 21,
+  "available_slots": 29,
+  "is_full": false
 }
 ```
 
 **What it does:**
 1. Updates the slot's status in the database
 2. Adjusts parking available/occupied slot counts
-3. **If slot became available:** notifies all spot watchers for this parking and auto-unsubscribes them
-4. Broadcasts real-time update to parking-specific and admin WebSocket channels
+3. Recomputes and stores `is_full` based on `occupied_slots >= total_slots`
+4. **If slot became available:** notifies all spot watchers for this parking and auto-unsubscribes them
+5. Broadcasts real-time update to parking-specific and admin WebSocket channels
 
 ---
 

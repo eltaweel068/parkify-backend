@@ -108,12 +108,12 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ---
 
-## Demo Accounts
+## Demo Data
 
-| Role | Email | Password |
-|---|---|---|
-| Admin | admin@parkify.com | admin123 |
-| User | amira@gmail.com | user123 |
-| User | ahmed@gmail.com | user123 |
-| User | sara@gmail.com | user123 |
-| User | omar@gmail.com | user123 |
+By default, `DEMO_MODE=false`, so the API does not expose preloaded dummy accounts, parkings, notifications, or alerts.
+
+If you need sample data for local testing, run:
+
+```bash
+python seed_firebase.py
+```

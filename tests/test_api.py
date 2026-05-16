@@ -5,6 +5,10 @@ Tests all endpoints: auth, users, parkings, bookings, IoT, admin, etc.
 
 import pytest
 from httpx import AsyncClient, ASGITransport
+from app.core.config import settings
+from app.services import get_parking_service
+
+settings.DEMO_MODE = True
 from app.main import app
 
 
@@ -148,7 +152,9 @@ class TestAuth:
             "email": "amira@gmail.com"
         })
         assert resp.status_code == 200
-        assert "demo_code" in resp.json()
+        data = resp.json()
+        assert data["success"] is True
+        assert "demo_code" not in data
 
     @pytest.mark.anyio
     async def test_forgot_password_phone(self, client):
@@ -163,7 +169,8 @@ class TestAuth:
         forgot = await client.post("/api/v1/auth/forgot-password/email", json={
             "email": "ahmed@gmail.com"
         })
-        code = forgot.json()["demo_code"]
+        assert forgot.status_code == 200
+        code = get_parking_service()._reset_codes["ahmed@gmail.com"]["code"]
 
         # Verify code
         verify = await client.post("/api/v1/auth/verify-code", json={
@@ -691,6 +698,30 @@ class TestIoT:
         assert resp.status_code == 403
 
     @pytest.mark.anyio
+    async def test_iot_parking_status(self, client):
+        resp = await client.get("/api/v1/iot/parking-status", params={
+            "parking_id": "parking_1",
+            "device_key": "esp32_parking1_key"
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert data["parking_id"] == "parking_1"
+        assert "total_slots" in data
+        assert "occupied_slots" in data
+        assert "available_slots" in data
+        assert "is_full" in data
+        assert data["available_slots"] + data["occupied_slots"] == data["total_slots"]
+
+    @pytest.mark.anyio
+    async def test_iot_parking_status_invalid_key(self, client):
+        resp = await client.get("/api/v1/iot/parking-status", params={
+            "parking_id": "parking_1",
+            "device_key": "wrong_key"
+        })
+        assert resp.status_code == 403
+
+    @pytest.mark.anyio
     async def test_fire_alert(self, client):
         resp = await client.post("/api/v1/iot/fire-alert", params={
             "parking_id": "parking_1",
@@ -722,7 +753,11 @@ class TestIoT:
             "device_key": "esp32_parking1_key"
         })
         assert resp.status_code == 200
-        assert resp.json()["status"] == "available"
+        data = resp.json()
+        assert data["status"] == "available"
+        assert "available_slots" in data
+        assert "occupied_slots" in data
+        assert "is_full" in data
 
     @pytest.mark.anyio
     async def test_gate_control(self, client):
@@ -862,6 +897,7 @@ class TestAdminParkingCRUD:
         assert data["name"] == "Test New Parking"
         assert data["total_slots"] == 20
         assert data["available_slots"] == 20
+        assert data["is_full"] is False
         assert data["rate_per_hour"] == 25.0
 
     @pytest.mark.anyio
