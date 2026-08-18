@@ -94,7 +94,7 @@ var app = builder.Build();
 //}
 
 app.UseCors();
-app.UseStaticFiles();
+
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
 app.UseAuthentication();
 app.UseAuthorization();
@@ -105,28 +105,12 @@ app.MapGet("/", () => Results.Json(new
 {
     message = "Welcome to Parkify API",
     version = "1.0.0",
-    docs = "/swagger",
-    admin_dashboard = "/dashboard"
+    docs = "/swagger"
 }));
 
 app.MapGet("/health", () => Results.Json(new { status = "healthy", service = "parkify-api", version = "1.0.0" }));
 
-// ─── Admin Dashboard ─────────────────────────────────────────────────────────
-app.MapGet("/dashboard", async (HttpContext context) =>
-{
-    var path = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "dashboard.html");
-    if (!File.Exists(path)) { context.Response.StatusCode = 404; return; }
-    context.Response.ContentType = "text/html";
-    await context.Response.SendFileAsync(path);
-});
 
-app.MapGet("/login", async (HttpContext context) =>
-{
-    var path = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "login.html");
-    if (!File.Exists(path)) { context.Response.StatusCode = 404; return; }
-    context.Response.ContentType = "text/html";
-    await context.Response.SendFileAsync(path);
-});
 
 
 // ─── WebSocket: Parking Updates ───────────────────────────────────────────────
