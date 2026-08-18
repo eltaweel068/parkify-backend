@@ -112,6 +112,11 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 By default, `DEMO_MODE=false`, so the API does not expose preloaded dummy accounts, parkings, notifications, or alerts.
 
+Bootstrap admin login is still available for dashboard access:
+
+- Email: `admin@parkify.com`
+- Password: `admin123`
+
 If you need sample data for local testing, run:
 
 ```bash

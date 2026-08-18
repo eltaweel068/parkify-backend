@@ -354,6 +354,7 @@ class ParkingService:
 
         if not settings.DEMO_MODE:
             self._clear_demo_seed_data()
+            self._init_default_admin_user()
         else:
             for parking in self._demo_parkings.values():
                 self.sync_parking_capacity(parking)
@@ -366,6 +367,26 @@ class ParkingService:
         self._notifications = {}
         self._alerts = {}
         self._vehicle_logs = {}
+
+    def _init_default_admin_user(self):
+        self._demo_users["admin_user"] = {
+            "id": "admin_user",
+            "email": "admin@parkify.com",
+            "name": "Admin Parkify",
+            "first_name": "Admin",
+            "last_name": "Parkify",
+            "role": "admin",
+            "password_hash": _ADMIN_HASH,
+            "is_active": True,
+            "phone": None,
+            "gender": None,
+            "address": None,
+            "profile_photo": None,
+            "cars": [],
+            "payment_methods": [],
+            "favorites": [],
+            "created_at": datetime.utcnow().isoformat()
+        }
 
     def sync_parking_capacity(self, parking: dict):
         total_slots = max(0, int(parking.get("total_slots", 0)))
