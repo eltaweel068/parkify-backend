@@ -3,6 +3,14 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
+# ─── Secrets & Environment Config ────────────────────────────────────────────
+# Real secrets must NEVER be committed.
+# Use environment variables or appsettings.Development.json locally.
+appsettings.json
+appsettings.*.json
+!appsettings.Development.json.example
+# ─────────────────────────────────────────────────────────────────────────────
+
 # User-specific files
 *.rsuser
 *.suo
