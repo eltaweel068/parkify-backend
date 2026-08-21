@@ -11,6 +11,9 @@ appsettings.*.json
 !appsettings.Development.json.example
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Documentation (kept locally only, not in repo)
+*.md
+
 # User-specific files
 *.rsuser
 *.suo
