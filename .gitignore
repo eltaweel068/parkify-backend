@@ -4,11 +4,10 @@
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
 # ─── Secrets & Environment Config ────────────────────────────────────────────
-# Real secrets must NEVER be committed.
-# Use environment variables or appsettings.Development.json locally.
-appsettings.json
+# appsettings.json is committed with EMPTY values only (no real secrets).
+# Real secrets go in environment variables on the server.
+appsettings.Development.json
 appsettings.*.json
-!appsettings.Development.json.example
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Documentation (kept locally only, not in repo)
